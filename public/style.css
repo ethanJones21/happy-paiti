@@ -177,6 +177,7 @@ tr.bday input[type=checkbox]:checked{background-color:#ABCBD0;border-color:#ABCB
 .pollbox h2,dialog h2{margin:0;font-size:17px}
 .pollhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
 .votebtn{align-self:center}
+.topbtns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .votebtn[hidden]{display:none}
 .pq{margin-top:14px}
 .pq h3{margin:0 0 4px;font-size:14px}
@@ -192,6 +193,9 @@ dialog .f input{height:38px;padding:0 10px;border:1px solid var(--line-strong);b
 .voteerr{margin:-6px 0 0;color:var(--red);font-size:13px;font-weight:500}
 .voteerr:empty{display:none}
 .voteerr.sending{color:var(--muted)}
+.btn.loading{pointer-events:none;opacity:.8}
+.btn.loading::before{content:"";display:inline-block;width:.9em;height:.9em;margin-right:.5em;vertical-align:-.1em;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:btnspin .7s linear infinite}
+@keyframes btnspin{to{transform:rotate(360deg)}}
 .vopts{display:flex;flex-direction:column;gap:8px}
 .vopt{display:flex;align-items:center;gap:8px;cursor:pointer}
 .vactions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}

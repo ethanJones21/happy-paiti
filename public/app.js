@@ -38,6 +38,7 @@ async function fetchState(){
   return j.state;   // null si aún no hay datos
 }
 let VOTES = {};
+const MAX_VOTES = 2;   // envíos de voto por persona (igual que en el servidor)
 
 let saveTimer, saving = false;
 function setStatus(t, bad){ const el=document.getElementById('status'); if(el){ el.textContent=t; el.style.color = bad?'var(--red)':'var(--muted)'; } }
@@ -163,6 +164,7 @@ function renderPublic(){
       <th colspan="2" class="grp gs">Reparto</th>
       <th rowspan="2" class="gs">Total</th>
       <th rowspan="2" class="gs">¿Pagó?</th>
+      <th rowspan="2" class="gs" title="Votos usados (máximo ${MAX_VOTES})">Votos</th>
     </tr>
     <tr>${S.prods.map((p,i)=>`<th class="${gs(i).trim()}"><div class="pn">${esc(p.name)}</div><div class="pp">${fmt(+p.price||0)}</div></th>`).join('')}
       <th class="gs" title="Cuota de la torta">torta</th>
@@ -180,6 +182,7 @@ function renderPublic(){
       <td class="num">${r.pay?fmt(r.desayuno):''}</td>
       <td class="tot gs">${r.pay?fmt(r.total):''}</td>
       <td class="gs">${st}</td>
+      <td class="num gs">${r.pay?`${Math.min(MAX_VOTES,r.u.voteCount||0)}/${MAX_VOTES}`:''}</td>
     </tr>`;
   }).join('');
   $('tfoot').innerHTML = '';
@@ -215,14 +218,14 @@ function renderTable(){
   $('tbody').innerHTML = S.people.map((u,idx)=>`
     <tr data-uid="${u.id}">
       <td class="sticky name"><div class="nm"><span class="idx">${idx+1}</span><input type="text" data-k="name" value="${esc(u.name)}" aria-label="Nombre de la persona ${idx+1}" placeholder="Nombre"></div></td>
-      ${S.prods.map((p,i)=>`<td class="chkc${gs(i)}"><label class="chk"><input type="checkbox" data-pid="${p.id}" aria-label="${esc(p.name)}" ${u.items[p.id]?'checked':''}></label></td>`).join('')}
+      ${S.prods.map((p,i)=>`<td class="chkc${gs(i)}"><label class="chk"><input type="checkbox" data-pid="${p.id}" aria-label="${esc(p.name)}" ${u.items[p.id]?'checked':''} ${u.excluded?'disabled':''}></label></td>`).join('')}
       <td class="num gs" data-c="torta"></td>
       <td class="num" data-c="des"></td>
       <td class="tot gs" data-c="total"></td>
-      <td class="paid gs"><div class="paidbox"><input type="number" data-k="paid" min="0" step="0.01" inputmode="decimal" value="${u.paid==null?'':u.paid}" aria-label="Monto pagado"><button class="payfull" data-payfull title="Marcar como pagado completo" aria-label="Marcar como pagado completo">${ic('check')}</button></div></td>
+      <td class="paid gs">${(u.excluded||u.id===S.bday)?'':`<div class="paidbox"><input type="number" data-k="paid" min="0" step="0.01" inputmode="decimal" value="${u.paid==null?'':u.paid}" aria-label="Monto pagado"><button class="payfull" data-payfull title="Marcar como pagado completo" aria-label="Marcar como pagado completo">${ic('check')}</button></div>`}</td>
       <td data-c="st"></td>
       <td data-c="saldo"></td>
-      <td class="exc gs"><input type="checkbox" data-k="excluded" ${u.excluded?'checked':''} aria-label="Excluido del reparto"></td>
+      <td class="exc gs">${u.id===S.bday?'':`<input type="checkbox" data-k="excluded" ${u.excluded?'checked':''} aria-label="Excluido del reparto">`}</td>
       <td><button class="iconbtn" data-delp="${u.id}" aria-label="Quitar persona" title="Quitar persona">${ic('x')}</button></td>
     </tr>`).join('');
 
@@ -331,6 +334,16 @@ else {
   renderAll();
   pull();
   setInterval(()=>{ if(!document.hidden) pull(); }, 30000);
+  // Al volver a la pestaña se actualiza en el acto (el navegador pausa los timers en segundo plano)
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) pull(); });
+  // Botón "Refrescar": vuelve a leer sólo los datos y redibuja la tabla, sin recargar la página
+  const rb = $('refreshBtn');
+  rb.addEventListener('click', async ()=>{
+    if(rb.disabled) return;
+    const txt = rb.textContent;
+    rb.disabled = true; rb.classList.add('loading'); rb.textContent = 'Actualizando…';
+    try{ await pull(); }finally{ rb.disabled = false; rb.classList.remove('loading'); rb.textContent = txt; }
+  });
 }
 
 // ---- Votar (vista pública) ----
@@ -353,10 +366,14 @@ if(!ADMIN){
     if(!$('voteEmail').value.trim()){ err('Escribe tu correo.'); return; }
     if(!Object.keys(picks).length){ err('Elige al menos una opción.'); return; }
     msg.textContent = 'Enviando…'; msg.classList.add('sending');
+    const sendBtn = $('voteSend'), sendTxt = sendBtn.textContent;
+    sendBtn.disabled = true; sendBtn.classList.add('loading'); sendBtn.textContent = 'Enviando…';
     try{
       const r = await fetch('/api/vote',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:$('voteName').value,email:$('voteEmail').value,picks})});
       const j = await r.json().catch(()=>({}));
       if(r.status===404){ err('El nombre y el correo no coinciden con ningún participante.'); return; }
+      if(r.status===403 && j.error==='vote limit'){ err('Ya usaste tus '+MAX_VOTES+' votos.'); return; }
+      if(r.status===403 && j.error==='excluded'){ err('Estás excluido del reparto, por lo que no puedes votar.'); return; }
       if(r.status===403){ err(j.error==='birthday person' ? 'Eres el cumpleañero: tu pedido lo elige el organizador.' : 'La votación está cerrada.'); return; }
       if(!r.ok) throw 0;
       dlg.close();
@@ -365,13 +382,14 @@ if(!ADMIN){
       renderAll();
       alert('¡Gracias por votar, '+proper(j.name)+'!');
     }catch(_){ err('No se pudo enviar el voto. Intenta de nuevo.'); }
+    finally{ sendBtn.disabled = false; sendBtn.classList.remove('loading'); sendBtn.textContent = sendTxt; }
   });
 }
 
 // ---- Eventos (sólo panel de administración) ----
 if(ADMIN){
 $('popen').addEventListener('change',e=>{ S.poll.open = e.target.checked; save(); renderPoll(); });
-$('bday').addEventListener('change',e=>{ S.bday = e.target.value; save(); refresh(); renderPeople(); });
+$('bday').addEventListener('change',e=>{ S.bday = e.target.value; save(); refresh(); renderPeople(); renderTable(); });
 
 $('plist').addEventListener('click',e=>{
   const b = e.target.closest('[data-addmail]'); if(!b) return;
@@ -411,7 +429,9 @@ $('tbody').addEventListener('input',e=>{
   const u = S.people.find(x=>x.id===tr.dataset.uid); const t = e.target;
   if(t.dataset.pid){ if(t.checked) u.items[t.dataset.pid]=true; else delete u.items[t.dataset.pid]; }
   else if(t.dataset.k==='name'){ u.name = t.value; const sel=$('bday').value; renderBdaySelect(); $('bday').value = sel; const nm=$('plist').querySelector(`li[data-uid="${u.id}"] .pn2`); if(nm) nm.textContent = u.name.trim()||'(sin nombre)'; }
-  else if(t.dataset.k==='excluded'){ u.excluded = t.checked; setTimeout(renderPeople,0); }
+  else if(t.dataset.k==='excluded'){
+    u.excluded = t.checked; save(); setTimeout(()=>{ renderPeople(); renderTable(); },0); return;
+  }
   else if(t.dataset.k==='paid'){ u.paid = t.value===''?null:+t.value; }
   else if(t.dataset.k==='excluded'){ u.excluded = t.checked; }
   save(); refresh();

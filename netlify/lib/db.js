@@ -3,13 +3,14 @@ const { MongoClient } = require('mongodb');
 // Colecciones:
 //   config        1 documento (_id 'main'): torta, cumpleañero, contador de ids, votación abierta/cerrada
 //   products      { _id, name, price, group, order }
-//   people        { _id, name, email, paid, excluded, order }   (email: privado, sólo lo ve el admin; sirve para validar el voto)
+//   people        { _id, name, email, paid, excluded, voteCount, order }   (email: privado, sólo lo ve el admin; sirve para validar el voto)
 //   consumptions  { _id 'personId:productId', personId, productId }   <- qué consumió cada persona
 //   votes         { _id 'personId:grupo', personId, group, productId, name }
 //                 Votación fija: una pregunta por grupo (bebidas, comida); las opciones son los productos del grupo.
 // (`state` y `options` son de la versión vieja; `state` sólo se lee una vez para migrar)
 
 const VOTE_GROUPS = ['bebidas', 'comida'];
+const MAX_VOTES = 2; // envíos de voto por persona (se reinicia al cambiar de cumpleañero)
 
 let client;
 async function getDb() {
@@ -31,13 +32,17 @@ async function saveState(d, s) {
     _id: String(p.id), name: String(p.name || ''), price: +p.price || 0, group: String(p.group || 'adicionales'), order: i,
   }));
   // El correo se puede haber puesto directo en la base: si el cliente no lo manda, se conserva el que había
-  const prevEmail = Object.fromEntries(
-    (await d.collection('people').find({}).toArray()).map((p) => [p._id, p.email || ''])
-  );
+  const prevPeople = await d.collection('people').find({}).toArray();
+  const prevEmail = Object.fromEntries(prevPeople.map((p) => [p._id, p.email || '']));
+  // El contador de votos lo lleva el servidor (el cliente no lo manda); vuelve a cero si cambia el cumpleañero
+  const prevCfg = await d.collection('config').findOne({ _id: 'main' });
+  const bdayChanged = !!prevCfg && String(prevCfg.bdayId || '') !== String(s.bday || '');
+  const prevVotes = Object.fromEntries(prevPeople.map((p) => [p._id, p.voteCount || 0]));
   const people = s.people.map((p, i) => ({
     _id: String(p.id), name: String(p.name || ''),
     email: String(p.email !== undefined ? p.email : prevEmail[String(p.id)] || '').trim().toLowerCase(),
     excluded: !!p.excluded,
+    voteCount: bdayChanged ? 0 : prevVotes[String(p.id)] || 0,
     paid: p.paid == null || p.paid === '' ? null : +p.paid, order: i,
   }));
   const prodIds = new Set(prods.map((p) => p._id));
@@ -90,7 +95,7 @@ async function loadState(d) {
   return {
     cake: config.cake, bday: config.bdayId, seq: config.seq,
     prods: prods.map((p) => ({ id: p._id, name: p.name, price: p.price, group: p.group })),
-    people: people.map((p) => ({ id: p._id, name: p.name, email: p.email || '', items: items[p._id] || {}, paid: p.paid, excluded: p.excluded })),
+    people: people.map((p) => ({ id: p._id, name: p.name, email: p.email || '', voteCount: p.voteCount || 0, items: items[p._id] || {}, paid: p.paid, excluded: p.excluded })),
     poll: { open },
   };
 }
@@ -104,4 +109,4 @@ async function voteCounts(d) {
   return Object.fromEntries(rows.map((r) => [r._id, r.n]));
 }
 
-module.exports = { VOTE_GROUPS, getDb, loadState, saveState, voteCounts };
+module.exports = { VOTE_GROUPS, MAX_VOTES, getDb, loadState, saveState, voteCounts };

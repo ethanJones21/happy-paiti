@@ -18,7 +18,10 @@
       <h1 id="title">Colaboración de cumpleaños</h1>
       <p class="sub">Lo que marcó cada persona, su total y si ya pagó. Se actualiza solo.</p>
     </div>
-    <button class="btn primary votebtn" id="voteBtn" type="button" hidden>Votar</button>
+    <div class="topbtns">
+      <button class="btn" id="refreshBtn" type="button" title="Actualizar la tabla">Refrescar</button>
+      <button class="btn primary votebtn" id="voteBtn" type="button" hidden>Votar</button>
+    </div>
   </header>
 
   <dialog id="voteDlg">
@@ -34,7 +37,7 @@
       <div id="voteOpts" class="vopts"></div>
       <div class="vactions">
         <button class="btn" id="voteCancel" type="button">Cancelar</button>
-        <button class="btn primary" type="submit">Enviar voto</button>
+        <button class="btn primary" id="voteSend" type="submit">Enviar voto</button>
       </div>
     </form>
   </dialog>

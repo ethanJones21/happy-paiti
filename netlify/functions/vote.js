@@ -1,4 +1,4 @@
-const { VOTE_GROUPS, getDb, voteCounts } = require('../lib/db');
+const { VOTE_GROUPS, MAX_VOTES, getDb, voteCounts } = require('../lib/db');
 
 const json = (status, body) => ({
   statusCode: status,
@@ -42,6 +42,23 @@ exports.handler = async (event) => {
 
     // El cumpleañero no vota: lo que consume lo elige el admin en el panel
     if (config.bdayId && String(person._id) === String(config.bdayId)) return json(403, { error: 'birthday person' });
+
+    // Los excluidos no participan en el reparto, así que tampoco votan
+    if (person.excluded) return json(403, { error: 'excluded' });
+
+    // Máximo MAX_VOTES envíos por persona (incremento atómico: dos envíos simultáneos no se cuelan)
+    const inc = await d.collection('people').updateOne(
+      { _id: person._id, $or: [{ voteCount: { $exists: false } }, { voteCount: { $lt: MAX_VOTES } }] },
+      { $inc: { voteCount: 1 } }
+    );
+    if (!inc.matchedCount) return json(403, { error: 'vote limit' });
+
+    // Cada envío reemplaza el voto anterior: si ahora no eligió algo de un grupo, se borra lo que tenía ahí
+    for (const g of VOTE_GROUPS.filter((g) => !chosen.some((c) => c.group === g))) {
+      await d.collection('votes').deleteOne({ _id: `${person._id}:${g}` });
+      const groupIds = (await d.collection('products').find({ group: g }).toArray()).map((p) => p._id);
+      await d.collection('consumptions').deleteMany({ personId: person._id, productId: { $in: groupIds } });
+    }
 
     // Un voto por persona y por pregunta; si vota otra vez, cambia su voto
     for (const c of chosen) {
