@@ -1,0 +1,11 @@
+{
+  "name": "cumple-colaboraciones",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "mongodb": "^6.10.0"
+  }
+}
