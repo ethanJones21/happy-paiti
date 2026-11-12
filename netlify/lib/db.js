@@ -14,9 +14,28 @@ const MAX_VOTES = 2; // envíos de voto por persona (se reinicia al cambiar de c
 
 let client;
 async function getDb() {
-  if (!client) client = new MongoClient(process.env.MONGODB_URI);
-  await client.connect();
-  return client.db(process.env.DB_NAME || 'cumple');
+  // Hasta 3 intentos: si la conexión reutilizada quedó muerta (función congelada) o el cluster está
+  // despertando, se descarta el cliente y se vuelve a conectar desde cero.
+  let lastErr;
+  for (let i = 0; i < 3; i++) {
+    try {
+      if (!client) {
+        client = new MongoClient(process.env.MONGODB_URI, {
+          serverSelectionTimeoutMS: 3000, connectTimeoutMS: 3000, maxPoolSize: 5,
+        });
+      }
+      await client.connect();
+      const d = client.db(process.env.DB_NAME || 'cumple');
+      await d.command({ ping: 1 }); // detecta sockets muertos antes de usarlos
+      return d;
+    } catch (e) {
+      lastErr = e;
+      const old = client; client = null;
+      if (old) old.close().catch(() => {});
+      await new Promise((r) => setTimeout(r, 300 * (i + 1)));
+    }
+  }
+  throw lastErr;
 }
 
 // Reemplaza el contenido de una colección con `docs` (upsert de los nuevos, borra los que sobran)
