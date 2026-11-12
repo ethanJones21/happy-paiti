@@ -83,7 +83,7 @@ async function startAdmin(){
     renderAll();
     document.body.classList.add('authed');
     setInterval(syncVotes, 10000);
-  }catch(e){ if(e.message==='auth') toLogin(); else alert('No se pudo conectar con la base de datos'); }
+  }catch(e){ if(e.message==='auth') toLogin(); else if(String(e.message).startsWith('http') || (e instanceof TypeError && /fetch/i.test(e.message))) alert('No se pudo conectar con la base de datos'); else { console.error(e); alert('Error al mostrar el panel: '+e.message); } }
 }
 const uid = p => p + (++S.seq);
 
@@ -261,7 +261,7 @@ function refresh(){
     const sd = tr.querySelector('[data-c=saldo]');
     sd.className = 'saldo ' + (saldo>0?'falta':saldo<0?'sobra':'');
     sd.textContent = !r.pay || saldo===0 ? '' : (saldo>0 ? 'falta ' : 'sobra ') + fmt(Math.abs(saldo));
-    tr.querySelector('[data-payfull]').hidden = !r.pay || r.st==='Sí';
+    const pf = tr.querySelector('[data-payfull]'); if(pf) pf.hidden = !r.pay || r.st==='Sí';
     tot.torta+=r.torta; tot.des+=r.desayuno; tot.total+=r.total; tot.paid+=r.pay?r.paid:0; tot.saldo+=r.pay?saldo:0;
   });
   S.prods.forEach(p=>{ const el=document.querySelector(`[data-tp="${p.id}"]`); if(el) el.textContent=fmt(tp[p.id]||0); });
