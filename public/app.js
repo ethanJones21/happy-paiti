@@ -164,7 +164,6 @@ function renderPublic(){
       <th colspan="2" class="grp gs">Reparto</th>
       <th rowspan="2" class="gs">Total</th>
       <th rowspan="2" class="gs">¿Pagó?</th>
-      <th rowspan="2" class="gs" title="Votos usados (máximo ${MAX_VOTES})">Votos</th>
     </tr>
     <tr>${S.prods.map((p,i)=>`<th class="${gs(i).trim()}"><div class="pn">${esc(p.name)}</div><div class="pp">${fmt(+p.price||0)}</div></th>`).join('')}
       <th class="gs" title="Cuota de la torta">torta</th>
@@ -182,7 +181,6 @@ function renderPublic(){
       <td class="num">${r.pay?fmt(r.desayuno):''}</td>
       <td class="tot gs">${r.pay?fmt(r.total):''}</td>
       <td class="gs">${st}</td>
-      <td class="num gs">${r.pay?`${Math.min(MAX_VOTES,r.u.voteCount||0)}/${MAX_VOTES}`:''}</td>
     </tr>`;
   }).join('');
   $('tfoot').innerHTML = '';
