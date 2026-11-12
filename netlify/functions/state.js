@@ -1,12 +1,5 @@
-const { MongoClient } = require('mongodb');
-
-// Se reutiliza la conexión entre invocaciones
-let client;
-async function col() {
-  if (!client) client = new MongoClient(process.env.MONGODB_URI);
-  await client.connect();
-  return client.db(process.env.DB_NAME || 'cumple').collection('state');
-}
+const { isAdmin } = require('../lib/auth');
+const { getDb, loadState, saveState, voteCounts } = require('../lib/db');
 
 const json = (status, body) => ({
   statusCode: status,
@@ -16,26 +9,28 @@ const json = (status, body) => ({
 
 exports.handler = async (event) => {
   try {
-    const given = event.headers['x-admin-password'];
-    const isAdmin = given && given === process.env.ADMIN_PASSWORD;
+    const hasAuth = !!(event.headers['authorization'] || event.headers['Authorization']);
+    const admin = isAdmin(event);
 
-    // Si mandan contraseña y es incorrecta -> 401 (así el panel valida el login con un GET)
-    if (given && !isAdmin) return json(401, { error: 'unauthorized' });
+    // Si mandan un token y no es válido/venció -> 401 (así el panel valida la sesión con un GET)
+    if (hasAuth && !admin) return json(401, { error: 'unauthorized' });
 
-    const c = await col();
+    const d = await getDb();
 
     if (event.httpMethod === 'GET') {
-      const doc = await c.findOne({ _id: 'main' });
-      return json(200, { state: doc ? doc.state : null });
+      const [state, votes] = await Promise.all([loadState(d), voteCounts(d)]);
+      // Los correos son privados: la vista pública no los recibe
+      if (state && !admin) state.people.forEach((p) => { delete p.email; });
+      return json(200, { state, votes });
     }
 
     if (event.httpMethod === 'PUT') {
-      if (!isAdmin) return json(401, { error: 'unauthorized' });
+      if (!admin) return json(401, { error: 'unauthorized' });
       const state = JSON.parse(event.body || 'null');
       if (!state || !Array.isArray(state.people) || !Array.isArray(state.prods)) {
         return json(400, { error: 'invalid state' });
       }
-      await c.updateOne({ _id: 'main' }, { $set: { state, updatedAt: new Date() } }, { upsert: true });
+      await saveState(d, state);
       return json(200, { ok: true });
     }
 

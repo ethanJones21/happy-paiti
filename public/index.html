@@ -9,12 +9,6 @@
 <body data-admin="0">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.5"/></symbol>
-  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
-  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
-  <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 2.5v8M4.8 7.6L8 10.8l3.2-3.2M3 13.5h10"/></symbol>
-  <symbol id="i-up" viewBox="0 0 16 16"><path d="M8 10.5v-8M4.8 5.4L8 2.2l3.2 3.2M3 13.5h10"/></symbol>
-  <symbol id="i-reset" viewBox="0 0 16 16"><path d="M3 8a5 5 0 1 0 1.6-3.7M3 2.5v3h3"/></symbol>
-  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3.5L10.5 8 6 12.5"/></symbol>
   <symbol id="i-dot" viewBox="0 0 16 16"><path d="M5 8h6"/></symbol>
 </svg>
 
@@ -22,35 +16,28 @@
   <header class="top">
     <div>
       <h1 id="title">Colaboración de cumpleaños</h1>
-      <p class="sub">Consulta quién ya pagó y cuánto falta. Se actualiza solo.</p>
+      <p class="sub">Lo que marcó cada persona, su total y si ya pagó. Se actualiza solo.</p>
     </div>
-    <div class="actions">
-      <button class="btn" id="btnExport"><svg class="ico"><use href="#i-down"/></svg>Exportar</button>
-      <button class="btn" id="btnImport"><svg class="ico"><use href="#i-up"/></svg>Importar</button>
-      <button class="btn danger" id="btnReset"><svg class="ico"><use href="#i-reset"/></svg>Restablecer</button>
-      <input type="file" id="file" accept=".json" hidden>
-    </div>
+    <button class="btn primary votebtn" id="voteBtn" type="button" hidden>Votar</button>
   </header>
 
-  <section class="panel settings" aria-label="Configuración">
-    <label class="f">Cumpleañero
-      <select id="bday"></select>
-    </label>
-    <label class="f">Total de la torta
-      <input type="number" id="cake" min="0" step="0.01" inputmode="decimal">
-    </label>
-    <details class="prodbox" id="prodbox">
-      <summary><svg class="ico"><use href="#i-chev"/></svg>Productos y precios unitarios</summary>
-      <div class="prods" id="prods"></div>
-      <div class="prodfoot"><button class="btn" id="addProd"><svg class="ico"><use href="#i-plus"/></svg>Producto</button></div>
-    </details>
-  </section>
-
-  <section class="panel summary" aria-live="polite">
-    <p class="sum-line" id="sumLine"></p>
-    <div class="bar" role="progressbar" aria-label="Avance de lo recaudado" id="bar"><i></i></div>
-    <p class="facts" id="facts"></p>
-  </section>
+  <dialog id="voteDlg">
+    <form id="voteForm" method="dialog">
+      <h2 id="voteQ"></h2>
+      <label class="f">Tu nombre (como aparece en la tabla)
+        <input type="text" id="voteName" autocomplete="off" placeholder="Ej. SARA">
+      </label>
+      <label class="f">Tu correo de Caja Paita
+        <input type="email" id="voteEmail" autocomplete="email" placeholder="tucorreo@ejemplo.com">
+      </label>
+      <p class="voteerr" id="voteMsg" role="alert"></p>
+      <div id="voteOpts" class="vopts"></div>
+      <div class="vactions">
+        <button class="btn" id="voteCancel" type="button">Cancelar</button>
+        <button class="btn primary" type="submit">Enviar voto</button>
+      </div>
+    </form>
+  </dialog>
 
   <div class="panel tablewrap" id="tw">
     <table>
@@ -58,12 +45,7 @@
       <tbody id="tbody"></tbody>
       <tfoot id="tfoot"></tfoot>
     </table>
-    <div class="empty" id="empty" hidden>Aún no hay personas. Agrega la primera.</div>
-  </div>
-
-  <div class="foot">
-    <button id="addPerson" class="btn primary"><svg class="ico"><use href="#i-plus"/></svg>Persona</button>
-    <p class="note" id="rules"></p>
+    <div class="empty" id="empty" hidden>Aún no hay personas.</div>
   </div>
 </div>
 

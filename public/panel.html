@@ -7,7 +7,7 @@
 <title>Cumple – Panel</title>
 <link rel="stylesheet" href="/style.css">
 </head>
-<body data-admin="1">
+<body data-admin="1" class="gated">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.5"/></symbol>
   <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
@@ -26,27 +26,54 @@
       <p class="sub">Marca los productos de cada persona; el precio unitario está en el encabezado. Escribe en <b>Pagó</b> el monto entregado y <b>¿Pagó?</b> se llena solo.</p>
     </div>
     <div class="actions"><span id="status" class="note" role="status" style="align-self:center"></span>
-      <button class="btn" id="btnExport"><svg class="ico"><use href="#i-down"/></svg>Exportar</button>
-      <button class="btn" id="btnImport"><svg class="ico"><use href="#i-up"/></svg>Importar</button>
-      <button class="btn danger" id="btnReset"><svg class="ico"><use href="#i-reset"/></svg>Restablecer</button>
-      <input type="file" id="file" accept=".json" hidden>
+      <button class="btn danger" id="btnReset"><svg class="ico"><use href="#i-reset"/></svg>Nuevo cumpleaños</button>
+      <button class="btn logout" id="btnLogout" type="button">Salir</button>
     </div>
   </header>
 
-  <section class="panel settings" aria-label="Configuración">
+  <nav class="tabs" role="tablist" aria-label="Secciones del panel">
+    <button class="tab" role="tab" id="tab-home" aria-controls="pane-home" data-tab="home" type="button">Home</button>
+    <button class="tab" role="tab" id="tab-cumpleanero" aria-controls="pane-cumpleanero" data-tab="cumpleanero" type="button">Cumpleañero</button>
+    <button class="tab" role="tab" id="tab-productos" aria-controls="pane-productos" data-tab="productos" type="button">Productos</button>
+    <button class="tab" role="tab" id="tab-preguntas" aria-controls="pane-preguntas" data-tab="preguntas" type="button">Preguntas</button>
+  </nav>
+
+  <div class="tabpane" role="tabpanel" id="pane-cumpleanero" aria-labelledby="tab-cumpleanero" hidden>
+  <section class="panel settings" aria-label="Cumpleañero">
     <label class="f">Cumpleañero
       <select id="bday"></select>
     </label>
     <label class="f">Total de la torta
       <input type="number" id="cake" min="0" step="0.01" inputmode="decimal">
     </label>
-    <details class="prodbox" id="prodbox">
-      <summary><svg class="ico"><use href="#i-chev"/></svg>Productos y precios unitarios</summary>
+  </section>
+  </div>
+
+  <div class="tabpane" role="tabpanel" id="pane-productos" aria-labelledby="tab-productos" hidden>
+  <section class="panel settings" aria-label="Productos">
+    <div class="prodbox" id="prodbox">
+      <h2 class="subh">Productos y precios unitarios</h2>
       <div class="prods" id="prods"></div>
       <div class="prodfoot"><button class="btn" id="addProd"><svg class="ico"><use href="#i-plus"/></svg>Producto</button></div>
-    </details>
+    </div>
+  </section>
+  </div>
+
+  <div class="tabpane" role="tabpanel" id="pane-preguntas" aria-labelledby="tab-preguntas" hidden>
+  <section class="panel settings" aria-label="Votación">
+    <label class="f">Votación abierta
+      <input type="checkbox" id="popen" checked>
+    </label>
+    <p class="note" style="flex:1 1 320px;margin:0">Preguntas fijas: <b>¿Qué bebida deseas?</b> y <b>¿Qué comida deseas?</b>. Las opciones son los productos de los grupos <i>bebidas</i> y <i>comida</i>; si agregas, quitas o renombras un producto, la votación se actualiza sola.</p>
   </section>
 
+  <section class="panel summary pollbox" id="pollbox" hidden>
+    <div class="pollhead"><div><h2 id="pollTitle"></h2><p class="facts" id="pollMeta"></p></div></div>
+    <div id="pollRes"></div>
+  </section>
+  </div>
+
+  <div class="tabpane" role="tabpanel" id="pane-home" aria-labelledby="tab-home">
   <section class="panel summary" aria-live="polite">
     <p class="sum-line" id="sumLine"></p>
     <div class="bar" role="progressbar" aria-label="Avance de lo recaudado" id="bar"><i></i></div>
@@ -66,8 +93,28 @@
     <button id="addPerson" class="btn primary"><svg class="ico"><use href="#i-plus"/></svg>Persona</button>
     <p class="note" id="rules"></p>
   </div>
+  </div>
 </div>
 
 <script src="/app.js"></script>
+<script>
+(function(){
+  var tabs=[].slice.call(document.querySelectorAll('.tab'));
+  function show(name){
+    if(!document.getElementById('pane-'+name)) name='home';
+    tabs.forEach(function(t){var on=t.dataset.tab===name;t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;});
+    ['home','cumpleanero','productos','preguntas'].forEach(function(n){document.getElementById('pane-'+n).hidden=n!==name;});
+    try{history.replaceState(null,'','#'+name);}catch(e){}
+  }
+  tabs.forEach(function(t,i){
+    t.addEventListener('click',function(){show(t.dataset.tab);});
+    t.addEventListener('keydown',function(e){
+      var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0; if(!d) return;
+      var n=tabs[(i+d+tabs.length)%tabs.length]; n.focus(); show(n.dataset.tab); e.preventDefault();
+    });
+  });
+  show(location.hash.slice(1));
+})();
+</script>
 </body>
 </html>

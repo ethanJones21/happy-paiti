@@ -1,5 +1,5 @@
 const ADMIN = document.body.dataset.admin === '1';
-const PW_KEY = 'cumple-admin-pw';
+const TOKEN_KEY = 'cumple-admin-token';
 const GROUPS = ['bebidas','comida','adicionales'];
 const ic = (n,c='') => `<svg class="ico ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 
@@ -10,8 +10,8 @@ function defaults(){
     {id:'p2',name:'café',price:1.9,group:'bebidas'},
     {id:'p3',name:'tamales',price:2,group:'comida'},
     {id:'p4',name:'empanadas',price:3.4,group:'comida'},
-    {id:'p5',name:'jugo tarcizo',price:6.5,group:'adicionales'},
-    {id:'p6',name:'lechón',price:8.5,group:'adicionales'},
+    {id:'p5',name:'jugo tarcizo',price:6.5,group:'bebidas'},
+    {id:'p6',name:'lechón',price:8.5,group:'comida'},
   ];
   const raw = [
     ['KIARA',['p3']],['ELA',[]],['CARLOS',['p2','p3']],['JEFRY',['p2','p6']],
@@ -25,54 +25,64 @@ function defaults(){
 }
 
 let S = defaults();
-let pw = ''; try{ pw = sessionStorage.getItem(PW_KEY) || ''; }catch(e){}
-const hdr = () => pw ? {'x-admin-password': pw} : {};
+let token = ''; try{ token = sessionStorage.getItem(TOKEN_KEY) || ''; }catch(e){}
+const hdr = () => token ? {'authorization': 'Bearer '+token} : {};
+function toLogin(){ try{ sessionStorage.removeItem(TOKEN_KEY); }catch(e){} location.replace('/login'); }
 
 async function fetchState(){
   const r = await fetch('/api/state', {headers: hdr(), cache:'no-store'});
   if(r.status===401) throw new Error('auth');
   if(!r.ok) throw new Error('http '+r.status);
-  return (await r.json()).state;   // null si aún no hay datos
+  const j = await r.json();
+  VOTES = j.votes || {};
+  return j.state;   // null si aún no hay datos
 }
+let VOTES = {};
 
-let saveTimer;
+let saveTimer, saving = false;
 function setStatus(t, bad){ const el=document.getElementById('status'); if(el){ el.textContent=t; el.style.color = bad?'var(--red)':'var(--muted)'; } }
 function save(){
   if(!ADMIN) return;
   setStatus('Guardando…');
   clearTimeout(saveTimer);
+  saving = true;
   saveTimer = setTimeout(async ()=>{
     try{
       const r = await fetch('/api/state', {method:'PUT', headers:{'content-type':'application/json', ...hdr()}, body: JSON.stringify(S)});
-      if(r.status===401){ setStatus('Sesión inválida', true); login(true); return; }
+      if(r.status===401){ toLogin(); return; }
       if(!r.ok) throw 0;
       setStatus('Guardado ✓');
     }catch(e){ setStatus('Error al guardar', true); }
+    finally{ saving = false; }
   }, 500);
 }
 
-async function login(retry){
-  const v = prompt(retry ? 'Contraseña incorrecta. Intenta de nuevo:' : 'Contraseña de administrador:');
-  if(v===null){ location.href='/'; return; }
-  pw = v;
+// Panel: trae los votos nuevos (que marcan productos solos) sin pisar lo que el admin está editando
+async function syncVotes(){
+  if(saving || document.hidden) return;
   try{
     const st = await fetchState();
-    try{ sessionStorage.setItem(PW_KEY, pw); }catch(e){}
-    if(st) S = st; else save();
-    renderAll();
-if(ADMIN){ login(false); }
-else {
-  const pull = () => fetchState().then(st=>{ if(st) S = st; renderAll(); }).catch(()=>{ if(!document.querySelector("#tbody tr")) renderAll(); });
-  pull();
-  setInterval(()=>{ if(!document.hidden) pull(); }, 30000);
+    if(saving || !st) return;            // si el admin empezó a editar mientras tanto, no se toca nada
+    st.people.forEach(sp=>{
+      const u = S.people.find(x=>x.id===sp.id); if(!u) return;
+      u.items = sp.items;
+      const tr = document.querySelector(`#tbody tr[data-uid="${u.id}"]`);
+      if(tr) tr.querySelectorAll('input[data-pid]').forEach(cb=>{ cb.checked = !!u.items[cb.dataset.pid]; });
+    });
+    refresh(); renderPoll();
+  }catch(_){}
 }
 
-// Vista pública: sólo lectura
-function applyReadOnly(){
-  document.querySelectorAll('.wrap input, .wrap select').forEach(el=>{ el.disabled = true; });
-  document.querySelectorAll('.payfull, [data-delp], [data-del], .actions, #addPerson, #addProd').forEach(el=>el.style.display='none');
-}
-  }catch(e){ if(e.message==='auth') login(true); else alert('No se pudo conectar con la base de datos'); }
+// Panel: sin sesión válida se redirige a /login; el contenido se muestra recién al validar el token
+async function startAdmin(){
+  if(!token){ toLogin(); return; }
+  try{
+    const st = await fetchState();
+    if(st) S = st; else save();
+    renderAll();
+    document.body.classList.add('authed');
+    setInterval(syncVotes, 10000);
+  }catch(e){ if(e.message==='auth') toLogin(); else alert('No se pudo conectar con la base de datos'); }
 }
 const uid = p => p + (++S.seq);
 
@@ -120,6 +130,47 @@ function renderProds(){
 function renderBdaySelect(){
   $('bday').innerHTML = `<option value="">— ninguno —</option>` +
     S.people.map(u=>`<option value="${u.id}" ${u.id===S.bday?'selected':''}>${esc(u.name.trim()||'(sin nombre)')}</option>`).join('');
+}
+
+// Vista pública: sólo lectura (productos marcados, total y si pagó)
+function renderPublic(){
+  const C = calc();
+  const groups = [];
+  S.prods.forEach(p=>{
+    const last = groups[groups.length-1];
+    if(last && last.g===p.group) last.n++; else groups.push({g:p.group,n:1});
+  });
+  const starts = new Set(); let acc=0; groups.forEach(g=>{ starts.add(acc); acc+=g.n; });
+  const gs = i => starts.has(i) ? ' gs' : '';
+  $('thead').innerHTML = `
+    <tr>
+      <th rowspan="2" class="sticky">Colaboradores</th>
+      ${groups.map(x=>`<th colspan="${x.n}" class="grp gs">${x.g}</th>`).join('')}
+      <th colspan="2" class="grp gs">Reparto</th>
+      <th rowspan="2" class="gs">Total</th>
+      <th rowspan="2" class="gs">¿Pagó?</th>
+    </tr>
+    <tr>${S.prods.map((p,i)=>`<th class="${gs(i).trim()}"><div class="pn">${esc(p.name)}</div><div class="pp">${fmt(+p.price||0)}</div></th>`).join('')}
+      <th class="gs" title="Cuota de la torta">torta</th>
+      <th title="${C.bd ? 'Lo que consumió '+esc(proper(C.bd.name))+', repartido entre los aportantes' : 'Cuota del cumpleañero'}">desayuno</th>
+    </tr>`;
+  $('tbody').innerHTML = C.rows.map((r,idx)=>{
+    const st = r.st==='Sí' ? `<span class="pill p-si">${ic('check')}Sí</span>`
+      : r.st==='No' ? `<span class="pill p-no">No</span>`
+      : r.st==='Cumpleañero' ? `<span class="pill p-bd">Cumpleañero</span>`
+      : `<span class="pill p-ex">Excluido</span>`;
+    return `<tr class="${r.u.id===S.bday?'bday':(r.u.excluded?'excl':'')}">
+      <td class="sticky name"><div class="nm"><span class="idx">${idx+1}</span><span class="pname">${esc(r.u.name)}</span></div></td>
+      ${S.prods.map((p,i)=>`<td class="chkc${gs(i)}"><span class="chk">${r.u.items[p.id]?ic('check'):''}</span></td>`).join('')}
+      <td class="num gs">${r.pay?fmt(r.torta):''}</td>
+      <td class="num">${r.pay?fmt(r.desayuno):''}</td>
+      <td class="tot gs">${r.pay?fmt(r.total):''}</td>
+      <td class="gs">${st}</td>
+    </tr>`;
+  }).join('');
+  $('tfoot').innerHTML = '';
+  $('title').textContent = C.bd ? 'Cumpleaños de '+proper(C.bd.name) : 'Colaboración de cumpleaños';
+  $('empty').hidden = S.people.length>0;
 }
 
 function renderTable(){
@@ -186,7 +237,7 @@ function refresh(){
     tr.querySelector('[data-c=total]').textContent = fmt(r.total);
     const st = tr.querySelector('[data-c=st]');
     st.innerHTML = r.st==='Sí' ? `<span class="pill p-si">${ic('check')}Sí</span>`
-      : r.st==='No' ? `<span class="pill p-no">${ic('dot')}No</span>`
+      : r.st==='No' ? `<span class="pill p-no">No</span>`
       : r.st==='Cumpleañero' ? `<span class="pill p-bd">Cumpleañero</span>`
       : `<span class="pill p-ex">Excluido</span>`;
     const saldo = r.pay ? r2(r.total - r.paid) : 0;
@@ -214,9 +265,98 @@ function refresh(){
   $('rules').textContent = `Aportantes = personas − excluidos − cumpleañero. La torta y lo que consumió el cumpleañero se dividen entre los aportantes. Total = productos marcados + torta + desayuno, redondeado a 2 decimales. "Sí" cuando el monto pagado es igual al total.`;
 }
 
-function renderAll(){ renderProds(); renderBdaySelect(); $('cake').value = S.cake; renderTable(); if(!ADMIN) applyReadOnly(); }
+// Corrige datos guardados antes y agrupa los productos por grupo (bebidas, comida, adicionales)
+function normalize(){
+  S.poll = {open: !(S.poll && S.poll.open===false)};   // formato viejo traía pregunta y opciones: ya no se usan
+  S.prods.forEach(p=>{
+    if(p.id==='p5' && p.group==='adicionales') p.group='bebidas';
+    if(p.id==='p6' && p.group==='adicionales') p.group='comida';
+  });
+  const rank = g => { const i=GROUPS.indexOf(g); return i<0?GROUPS.length:i; };
+  S.prods = S.prods.map((p,i)=>[p,i]).sort((a,b)=>rank(a[0].group)-rank(b[0].group)||a[1]-b[1]).map(x=>x[0]);
+}
 
-// ---- Eventos ----
+// ---- Votación ----
+// Preguntas fijas: las opciones son los productos del grupo, así que siguen a la lista de productos
+const QUESTIONS = [
+  {group:'bebidas', q:'¿Qué bebida deseas?'},
+  {group:'comida',  q:'¿Qué comida deseas?'},
+];
+const pollQs = () => QUESTIONS
+  .map(x=>({...x, opts:S.prods.filter(p=>p.group===x.group && p.name.trim())}))
+  .filter(x=>x.opts.length);
+
+function renderPoll(){
+  const qs = pollQs();
+  const vb = $('voteBtn'); if(vb) vb.hidden = !(S.poll.open && qs.length);   // botón junto al título (vista pública)
+  const box = $('pollbox'); if(!box) return;                                  // el panel de resultados sólo existe en el admin
+  if(!qs.length){ box.hidden = true; return; }
+  box.hidden = false;
+  $('pollTitle').textContent = 'Votación';
+  $('pollMeta').textContent = S.poll.open ? 'Votación abierta' : 'Votación cerrada';
+  $('pollRes').innerHTML = qs.map(x=>{
+    const total = x.opts.reduce((a,p)=>a+(VOTES[p.id]||0),0);
+    return `<div class="pq"><h3>${x.q} <span class="facts">${total} ${total===1?'voto':'votos'}</span></h3>` +
+      x.opts.map(p=>{
+        const n = VOTES[p.id]||0, pct = total ? Math.round(n/total*100) : 0;
+        return `<div class="popt"><div class="pl"><span>${esc(p.name)}</span><b>${n}</b></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+      }).join('') + `</div>`;
+  }).join('');
+}
+
+function renderAll(){
+  normalize();
+  if(!ADMIN){ renderPublic(); renderPoll(); return; }
+  renderProds(); renderBdaySelect(); $('cake').value = S.cake; renderTable(); $('popen').checked = !!S.poll.open; renderPoll();
+}
+
+// ---- Arranque ----
+if(ADMIN){ startAdmin(); }
+else {
+  const pull = () => fetchState().then(st=>{ if(st) S = st; renderAll(); }).catch(()=>{ if(!document.querySelector('#tbody tr')) renderAll(); });
+  renderAll();
+  pull();
+  setInterval(()=>{ if(!document.hidden) pull(); }, 30000);
+}
+
+// ---- Votar (vista pública) ----
+if(!ADMIN){
+  const dlg = $('voteDlg'), msg = $('voteMsg');
+  $('voteBtn').addEventListener('click',()=>{
+    $('voteQ').textContent = 'Tu voto';
+    $('voteOpts').innerHTML = pollQs().map(x=>`<fieldset class="vq"><legend>${x.q}</legend>` +
+      x.opts.map(p=>`<label class="vopt"><input type="radio" name="pick-${x.group}" value="${p.id}"> ${esc(p.name)}</label>`).join('') +
+      `</fieldset>`).join('');
+    msg.textContent = ''; msg.classList.remove('sending'); $('voteEmail').value = ''; dlg.showModal(); $('voteName').focus();
+  });
+  $('voteCancel').addEventListener('click',()=>dlg.close());
+  $('voteForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const picks = {};
+    QUESTIONS.forEach(x=>{ const c = dlg.querySelector(`input[name=pick-${x.group}]:checked`); if(c) picks[x.group] = c.value; });
+    const err = t => { msg.classList.remove('sending'); msg.textContent = t; };
+    if(!$('voteName').value.trim()){ err('Escribe tu nombre.'); return; }
+    if(!$('voteEmail').value.trim()){ err('Escribe tu correo.'); return; }
+    if(!Object.keys(picks).length){ err('Elige al menos una opción.'); return; }
+    msg.textContent = 'Enviando…'; msg.classList.add('sending');
+    try{
+      const r = await fetch('/api/vote',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:$('voteName').value,email:$('voteEmail').value,picks})});
+      const j = await r.json().catch(()=>({}));
+      if(r.status===404){ err('El nombre y el correo no coinciden con ningún participante.'); return; }
+      if(r.status===403){ err('La votación está cerrada.'); return; }
+      if(!r.ok) throw 0;
+      dlg.close();
+      // El voto ya marcó el producto en la tabla: se vuelve a leer para mostrarlo
+      try{ const st = await fetchState(); if(st) S = st; }catch(_){}
+      renderAll();
+      alert('¡Gracias por votar, '+proper(j.name)+'!');
+    }catch(_){ err('No se pudo enviar el voto. Intenta de nuevo.'); }
+  });
+}
+
+// ---- Eventos (sólo panel de administración) ----
+if(ADMIN){
+$('popen').addEventListener('change',e=>{ S.poll.open = e.target.checked; save(); renderPoll(); });
 $('bday').addEventListener('change',e=>{ S.bday = e.target.value; save(); refresh(); });
 $('cake').addEventListener('input',e=>{ S.cake = e.target.value===''?0:+e.target.value; save(); refresh(); });
 
@@ -225,6 +365,7 @@ $('prods').addEventListener('input',e=>{
   const row = e.target.closest('[data-pid]'); if(!row) return;
   const p = S.prods.find(x=>x.id===row.dataset.pid); const k = e.target.dataset.k;
   p[k] = k==='price' ? (e.target.value===''?0:+e.target.value) : e.target.value;
+  if(k==='group'){ normalize(); save(); renderProds(); renderTable(); return; }
   save(); renderTable();
 });
 $('prods').addEventListener('click',e=>{
@@ -273,23 +414,12 @@ $('addPerson').addEventListener('click',()=>{
   $('tw').scrollTop = $('tw').scrollHeight;
 });
 
+$('btnLogout').addEventListener('click',toLogin);
 $('btnReset').addEventListener('click',()=>{
-  if(!confirm('Se reemplazarán los datos guardados por los del Excel. ¿Continuar?')) return;
-  S = defaults(); save(); renderAll();
+  if(!confirm('Nuevo cumpleaños: se borran consumos, pagos, cumpleañero, torta y votos. Se conservan la lista de personas y de productos. ¿Continuar?')) return;
+  S.people.forEach(u=>{ u.items = {}; u.paid = null; });
+  S.bday = ''; S.cake = 0;
+  S.poll = {open:true};
+  save(); renderAll();
 });
-$('btnExport').addEventListener('click',()=>{
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));
-  a.download = 'cumple-'+(proper(S.people.find(u=>u.id===S.bday)?.name||'datos'))+'.json'; a.click();
-});
-$('btnImport').addEventListener('click',()=>$('file').click());
-$('file').addEventListener('change',e=>{
-  const f = e.target.files[0]; if(!f) return;
-  f.text().then(t=>{
-    try{ const j = JSON.parse(t); if(!j.people||!j.prods) throw 0; S=j; S.seq=S.seq||1000; save(); renderAll(); }
-    catch(_){ alert('Archivo no válido'); }
-  });
-  e.target.value='';
-});
-
-renderAll();
+}

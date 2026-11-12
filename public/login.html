@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Cumple – Acceso</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="loginpage">
+<main class="logincard panel">
+  <h1>Acceso al panel</h1>
+  <p class="sub">Solo el administrador puede editar la colaboración.</p>
+  <form id="loginForm" autocomplete="on">
+    <label class="f">Usuario
+      <input type="text" id="user" name="username" autocomplete="username" required autofocus>
+    </label>
+    <label class="f">Contraseña
+      <input type="password" id="pass" name="password" autocomplete="current-password" required>
+    </label>
+    <p class="note loginmsg" id="msg" role="alert"></p>
+    <button class="btn primary" id="go" type="submit">Entrar</button>
+  </form>
+  <a class="back" href="/">← Ver la tabla pública</a>
+</main>
+<script>
+const KEY = 'cumple-admin-token';
+const $ = (id) => document.getElementById(id);
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('msg').textContent = ''; $('go').disabled = true;
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ user: $('user').value.trim(), password: $('pass').value }),
+    });
+    if (r.status === 401) { $('msg').textContent = 'Usuario o contraseña incorrectos.'; $('pass').select(); return; }
+    if (!r.ok) throw 0;
+    const { token } = await r.json();
+    sessionStorage.setItem(KEY, token);
+    location.replace('/panel');
+  } catch (_) {
+    $('msg').textContent = 'No se pudo conectar. Intenta de nuevo.';
+  } finally { $('go').disabled = false; }
+});
+</script>
+</body>
+</html>
