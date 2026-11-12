@@ -34,6 +34,7 @@
   <nav class="tabs" role="tablist" aria-label="Secciones del panel">
     <button class="tab" role="tab" id="tab-home" aria-controls="pane-home" data-tab="home" type="button">Home</button>
     <button class="tab" role="tab" id="tab-cumpleanero" aria-controls="pane-cumpleanero" data-tab="cumpleanero" type="button">Cumpleañero</button>
+    <button class="tab" role="tab" id="tab-participantes" aria-controls="pane-participantes" data-tab="participantes" type="button">Participantes</button>
     <button class="tab" role="tab" id="tab-productos" aria-controls="pane-productos" data-tab="productos" type="button">Productos</button>
     <button class="tab" role="tab" id="tab-preguntas" aria-controls="pane-preguntas" data-tab="preguntas" type="button">Preguntas</button>
   </nav>
@@ -46,6 +47,14 @@
     <label class="f">Total de la torta
       <input type="number" id="cake" min="0" step="0.01" inputmode="decimal">
     </label>
+  </section>
+  </div>
+
+  <div class="tabpane" role="tabpanel" id="pane-participantes" aria-labelledby="tab-participantes" hidden>
+  <section class="panel people" aria-label="Participantes">
+    <p class="note" style="margin:0 0 12px">El correo es privado y sirve para validar el voto de cada participante.</p>
+    <ul class="plist" id="plist"></ul>
+    <p class="empty-inline" id="plistEmpty" hidden>Aún no hay participantes. Agrégalos en Home.</p>
   </section>
   </div>
 
@@ -103,7 +112,7 @@
   function show(name){
     if(!document.getElementById('pane-'+name)) name='home';
     tabs.forEach(function(t){var on=t.dataset.tab===name;t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;});
-    ['home','cumpleanero','productos','preguntas'].forEach(function(n){document.getElementById('pane-'+n).hidden=n!==name;});
+    ['home','cumpleanero','participantes','productos','preguntas'].forEach(function(n){document.getElementById('pane-'+n).hidden=n!==name;});
     try{history.replaceState(null,'','#'+name);}catch(e){}
   }
   tabs.forEach(function(t,i){

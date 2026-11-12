@@ -40,6 +40,9 @@ exports.handler = async (event) => {
     if (matches.length !== 1) return json(404, { error: 'unknown name' });
     const person = matches[0];
 
+    // El cumpleañero no vota: lo que consume lo elige el admin en el panel
+    if (config.bdayId && String(person._id) === String(config.bdayId)) return json(403, { error: 'birthday person' });
+
     // Un voto por persona y por pregunta; si vota otra vez, cambia su voto
     for (const c of chosen) {
       await d.collection('votes').updateOne(

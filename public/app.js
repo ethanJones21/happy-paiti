@@ -132,6 +132,20 @@ function renderBdaySelect(){
     S.people.map(u=>`<option value="${u.id}" ${u.id===S.bday?'selected':''}>${esc(u.name.trim()||'(sin nombre)')}</option>`).join('');
 }
 
+// Participantes: lista con correo (privado). Sin correo se muestra el botón "Agregar correo"
+function renderPeople(){
+  const ul = $('plist'); if(!ul) return;
+  ul.innerHTML = S.people.map((u,i)=>`
+    <li data-uid="${u.id}">
+      <span class="idx">${i+1}</span>
+      <span class="pn2">${esc(u.name.trim()||'(sin nombre)')}</span>
+      ${u.id===S.bday?'<span class="tag">Cumpleañero</span>':(u.excluded?'<span class="tag">Excluido</span>':'')}
+      ${u.email ? `<input type="email" data-email value="${esc(u.email)}" aria-label="Correo de ${esc(u.name.trim()||'participante')}" autocomplete="off">`
+        : `<button class="btn" data-addmail type="button">${ic('plus')}Agregar correo</button>`}
+    </li>`).join('');
+  $('plistEmpty').hidden = S.people.length>0;
+}
+
 // Vista pública: sólo lectura (productos marcados, total y si pagó)
 function renderPublic(){
   const C = calc();
@@ -307,7 +321,7 @@ function renderPoll(){
 function renderAll(){
   normalize();
   if(!ADMIN){ renderPublic(); renderPoll(); return; }
-  renderProds(); renderBdaySelect(); $('cake').value = S.cake; renderTable(); $('popen').checked = !!S.poll.open; renderPoll();
+  renderProds(); renderBdaySelect(); renderPeople(); $('cake').value = S.cake; renderTable(); $('popen').checked = !!S.poll.open; renderPoll();
 }
 
 // ---- Arranque ----
@@ -343,7 +357,7 @@ if(!ADMIN){
       const r = await fetch('/api/vote',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:$('voteName').value,email:$('voteEmail').value,picks})});
       const j = await r.json().catch(()=>({}));
       if(r.status===404){ err('El nombre y el correo no coinciden con ningún participante.'); return; }
-      if(r.status===403){ err('La votación está cerrada.'); return; }
+      if(r.status===403){ err(j.error==='birthday person' ? 'Eres el cumpleañero: tu pedido lo elige el organizador.' : 'La votación está cerrada.'); return; }
       if(!r.ok) throw 0;
       dlg.close();
       // El voto ya marcó el producto en la tabla: se vuelve a leer para mostrarlo
@@ -357,7 +371,20 @@ if(!ADMIN){
 // ---- Eventos (sólo panel de administración) ----
 if(ADMIN){
 $('popen').addEventListener('change',e=>{ S.poll.open = e.target.checked; save(); renderPoll(); });
-$('bday').addEventListener('change',e=>{ S.bday = e.target.value; save(); refresh(); });
+$('bday').addEventListener('change',e=>{ S.bday = e.target.value; save(); refresh(); renderPeople(); });
+
+$('plist').addEventListener('click',e=>{
+  const b = e.target.closest('[data-addmail]'); if(!b) return;
+  const inp = document.createElement('input');
+  inp.type = 'email'; inp.dataset.email = ''; inp.placeholder = 'correo@ejemplo.com'; inp.autocomplete = 'off';
+  inp.setAttribute('aria-label','Correo de '+(S.people.find(x=>x.id===b.closest('li').dataset.uid)?.name.trim()||'participante'));
+  b.replaceWith(inp); inp.focus();
+});
+$('plist').addEventListener('input',e=>{
+  if(!('email' in e.target.dataset)) return;
+  const u = S.people.find(x=>x.id===e.target.closest('li').dataset.uid); if(!u) return;
+  u.email = e.target.value.trim(); save();
+});
 $('cake').addEventListener('input',e=>{ S.cake = e.target.value===''?0:+e.target.value; save(); refresh(); });
 
 // Producto: el nombre/precio/grupo cambian los encabezados, por eso se reconstruye la tabla (la lista de productos conserva el foco)
@@ -383,7 +410,8 @@ $('tbody').addEventListener('input',e=>{
   const tr = e.target.closest('tr'); if(!tr) return;
   const u = S.people.find(x=>x.id===tr.dataset.uid); const t = e.target;
   if(t.dataset.pid){ if(t.checked) u.items[t.dataset.pid]=true; else delete u.items[t.dataset.pid]; }
-  else if(t.dataset.k==='name'){ u.name = t.value; const sel=$('bday').value; renderBdaySelect(); $('bday').value = sel; }
+  else if(t.dataset.k==='name'){ u.name = t.value; const sel=$('bday').value; renderBdaySelect(); $('bday').value = sel; const nm=$('plist').querySelector(`li[data-uid="${u.id}"] .pn2`); if(nm) nm.textContent = u.name.trim()||'(sin nombre)'; }
+  else if(t.dataset.k==='excluded'){ u.excluded = t.checked; setTimeout(renderPeople,0); }
   else if(t.dataset.k==='paid'){ u.paid = t.value===''?null:+t.value; }
   else if(t.dataset.k==='excluded'){ u.excluded = t.checked; }
   save(); refresh();
@@ -406,10 +434,10 @@ $('tbody').addEventListener('click',e=>{
   const u = S.people.find(x=>x.id===id);
   if(!confirm('¿Quitar a '+(u.name.trim()||'esta persona')+'?')) return;
   S.people = S.people.filter(x=>x.id!==id); if(S.bday===id) S.bday='';
-  save(); renderBdaySelect(); renderTable();
+  save(); renderBdaySelect(); renderPeople(); renderTable();
 });
 $('addPerson').addEventListener('click',()=>{
-  S.people.push({id:uid('u'),name:'',items:{},paid:null,excluded:false}); save(); renderBdaySelect(); renderTable();
+  S.people.push({id:uid('u'),name:'',items:{},paid:null,excluded:false}); save(); renderBdaySelect(); renderPeople(); renderTable();
   const ins = $('tbody').querySelectorAll('input[data-k=name]'); const l = ins[ins.length-1]; l.focus();
   $('tw').scrollTop = $('tw').scrollHeight;
 });

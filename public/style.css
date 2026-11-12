@@ -68,6 +68,18 @@ label.f input{font-weight:400;color:var(--ink)}
 .tab:hover{color:var(--ink);background:rgba(255,255,255,.6)}
 .tab[aria-selected="true"]{color:var(--green-d);border-bottom-color:var(--green)}
 .tabpane[hidden]{display:none}
+
+/* Participantes */
+.people{padding:16px}
+.plist{list-style:none;margin:0;padding:0}
+.plist li{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.plist li:first-child{border-top:0}
+.plist .idx{color:var(--muted);width:24px;text-align:right;font-variant-numeric:tabular-nums}
+.plist .pn2{flex:0 0 200px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plist .tag{font-size:12px;color:var(--muted)}
+.plist input[type=email]{background:#fff;border:1px solid var(--line-strong);border-radius:8px;padding:7px 10px;height:36px;flex:1 1 240px;max-width:360px;min-width:0}
+.empty-inline{margin:0;color:var(--muted)}
+@media(max-width:560px){.plist li{flex-wrap:wrap}.plist .pn2{flex:1 1 60%}}
 .prods{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:8px 16px;margin-top:12px}
 .prod{display:flex;gap:6px;align-items:center}
 .prod input[type=text]{flex:1 1 120px}
