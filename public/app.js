@@ -140,9 +140,9 @@ function renderPeople(){
     <li data-uid="${u.id}">
       <span class="idx">${i+1}</span>
       <span class="pn2">${esc(u.name.trim()||'(sin nombre)')}</span>
-      ${u.id===S.bday?'<span class="tag">Cumpleañero</span>':(u.excluded?'<span class="tag">Excluido</span>':'')}
       ${u.email ? `<input type="email" data-email value="${esc(u.email)}" aria-label="Correo de ${esc(u.name.trim()||'participante')}" autocomplete="off">`
         : `<button class="btn" data-addmail type="button">${ic('plus')}Agregar correo</button>`}
+      ${u.id===S.bday?'<span class="tag">Cumpleañero</span>':(u.excluded?'<span class="tag">Excluido</span>':'')}
     </li>`).join('');
   $('plistEmpty').hidden = S.people.length>0;
 }
